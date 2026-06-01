@@ -49,7 +49,7 @@ Telegram-based personal AI assistant. Handles voice and text messages. Manages G
 
 ### 3. Set your calendar
 
-In the **Google Calendar** node, the calendar is already set to `hokamsingh07@gmail.com`. Update if needed.
+In the **Google Calendar** node, set the calendar to your Google account email.
 
 ### 4. Activate
 

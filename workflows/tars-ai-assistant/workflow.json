@@ -8,8 +8,7 @@
         "calendar": {
           "__rl": true,
           "mode": "id",
-          "value": "hosingh@trueigtech.com",
-          "__regex": "(^[a-zA-Z0-9.!\\#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+          "value": "YOUR_GOOGLE_CALENDAR_ID"
         },
         "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('start', 'Event start in ISO 8601 e.g. 2026-06-01T00:00:00. Convert today/tomorrow to ISO. Optional.', 'string', '') || new Date(new Date().setHours(0,0,0,0)).toISOString() }}",
         "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('end',   'Event end in ISO 8601 e.g. 2026-06-01T23:59:59. Convert today/tomorrow to ISO. Optional.', 'string', '') || new Date(new Date().setHours(23,59,59,999)).toISOString() }}",
