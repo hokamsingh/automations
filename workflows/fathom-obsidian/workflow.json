@@ -1,0 +1,377 @@
+{
+  "name": "Fathom \u2192 Obsidian Import",
+  "nodes": [
+    {
+      "id": "sched-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-meetings-001",
+      "name": "Fetch Fathom Meetings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.fathom.ai/external/v1/meetings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YFWFeiJYtAR7Jjkh",
+          "name": "Fathom X-Api-Key"
+        }
+      }
+    },
+    {
+      "id": "code-dedupe-001",
+      "name": "Deduplicate Meetings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) { staticData.importedIds = []; }\n\nconst resp = $input.first().json;\n\n// Detect API auth failure\nif (resp.message && !resp.items) {\n  const dateStr = new Date().toISOString().split('T')[0];\n  throw new Error(\n    `Fathom API error on ${dateStr}: \"${resp.message}\". ` +\n    `Check credentials at Settings \u2192 Credentials \u2192 Fathom API Key. ` +\n    `Last run: ${new Date().toISOString()}`\n  );\n}\n\nconst meetings = resp.items || [];\nif (meetings.length === 0) {\n  return [{ json: { hasNew: false, meetings: [] } }];\n}\n\nconst newMeetings = meetings.filter(m => !staticData.importedIds.includes(String(m.recording_id)));\nreturn [{ json: { hasNew: newMeetings.length > 0, meetings: newMeetings } }];\n"
+      }
+    },
+    {
+      "id": "if-hasnew-001",
+      "name": "Has New Meetings?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.hasNew }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-exit-001",
+      "name": "No New Meetings \u2014 Exit",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        880,
+        480
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "code-split-001",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const meetings = $input.first().json.meetings;\nreturn meetings.map(m => ({ json: m }));"
+      }
+    },
+    {
+      "id": "http-summary-001",
+      "name": "Fetch Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.fathom.ai/external/v1/recordings/' + $json.recording_id + '/summary' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YFWFeiJYtAR7Jjkh",
+          "name": "Fathom X-Api-Key"
+        }
+      }
+    },
+    {
+      "id": "code-attach-001",
+      "name": "Attach Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const summaryResp = $input.first().json;\nconst meeting = $('Split Into Items').item.json;\nconst summaryMd = (summaryResp.summary && summaryResp.summary.markdown_formatted) || '';\nreturn [{ json: { ...meeting, _summaryMd: summaryMd } }];"
+      }
+    },
+    {
+      "id": "http-transcript-001",
+      "name": "Fetch Transcript",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.fathom.ai/external/v1/recordings/' + $json.recording_id + '/transcript' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YFWFeiJYtAR7Jjkh",
+          "name": "Fathom X-Api-Key"
+        }
+      }
+    },
+    {
+      "id": "code-markdown-001",
+      "name": "Generate Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst transcriptResp = $input.first().json;\nconst meeting = $('Attach Summary').item.json;\n\nconst rawDate = meeting.scheduled_start_time || meeting.created_at || new Date().toISOString();\nconst dateStr = new Date(rawDate).toISOString().split('T')[0];\nconst title = meeting.meeting_title || meeting.title || 'Untitled Meeting';\nconst safeTitle = title.toLowerCase().replace(/[^a-z0-9\\s]+/g,'').trim().replace(/\\s+/g,'-').substring(0,60);\nconst filename = dateStr + '-' + safeTitle + '.md';\n\n// Compact summary \u2014 strip fathom timestamp links, keep text\nconst rawSummary = meeting._summaryMd || '';\nconst summaryCompact = rawSummary\n  .replace(/\\[([^\\]]+)\\]\\(https:\\/\\/fathom\\.video\\/share\\/[^)]+\\)/g, '$1')\n  .trim() || '_No summary._';\n\n// Transcript \u2014 max 1200 chars, then truncate\nconst lines = (transcriptResp.transcript || []);\nlet transcriptText = '';\nfor (const line of lines) {\n  const speaker = (line.speaker && line.speaker.display_name) ? line.speaker.display_name : 'Unknown';\n  const words = (line.words || []).map(w => w.text).join(' ').trim();\n  if (words) transcriptText += `**${speaker}**: ${words}\\n\\n`;\n}\nconst transcriptSection = transcriptText.length > 1200\n  ? transcriptText.substring(0, 1200).replace(/\\s+$/, '') + `\\n\\n_[truncated \u2014 full recording: ${meeting.share_url || meeting.url || ''}]_`\n  : (transcriptText || '_No transcript._');\n\n// Action items\nconst actions = (meeting.action_items || []);\nconst actionLines = actions.length\n  ? actions.map(a => `- [ ] ${typeof a === 'string' ? a : (a.description || JSON.stringify(a))}`).join('\\n')\n  : '- [ ] None identified';\n\nconst markdown = `# ${title}\n\nDate: ${dateStr}\nFathom: ${meeting.share_url || meeting.url || ''}\n\n## Summary\n${summaryCompact}\n\n## Action Items\n${actionLines}\n\n## Raw Transcript\n${transcriptSection}\n`;\n\nreturn [{ json: {\n  recording_id: meeting.recording_id,\n  title,\n  markdown,\n  filename,\n  dateStr\n}}];\n"
+      }
+    },
+    {
+      "id": "code-prep-001",
+      "name": "Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst encoded = Buffer.from(item.markdown, 'utf8').toString('base64');\nreturn [{\n  json: { ...item },\n  binary: {\n    fileData: {\n      data: encoded,\n      mimeType: 'text/markdown',\n      fileName: item.filename,\n      fileExtension: 'md'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "write-bin-001",
+      "name": "Write to Obsidian",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        300
+      ],
+      "parameters": {
+        "fileName": "=/vault/Meetings/{{ $json.filename }}",
+        "dataPropertyName": "fileData"
+      }
+    },
+    {
+      "id": "code-mark-001",
+      "name": "Mark as Imported",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) { staticData.importedIds = []; }\nconst id = String($input.first().json.recording_id);\nif (!staticData.importedIds.includes(id)) { staticData.importedIds.push(id); }\nreturn $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Fathom Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Fathom Meetings": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Meetings": {
+      "main": [
+        [
+          {
+            "node": "Has New Meetings?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Meetings?": {
+      "main": [
+        [
+          {
+            "node": "Split Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Meetings \u2014 Exit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [
+          {
+            "node": "Fetch Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Summary": {
+      "main": [
+        [
+          {
+            "node": "Attach Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Summary": {
+      "main": [
+        [
+          {
+            "node": "Fetch Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Transcript": {
+      "main": [
+        [
+          {
+            "node": "Generate Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Markdown": {
+      "main": [
+        [
+          {
+            "node": "Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Obsidian": {
+      "main": [
+        [
+          {
+            "node": "Mark as Imported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Write to Obsidian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {}
+}
