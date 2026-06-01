@@ -15,7 +15,7 @@
         "calendar": {
           "__rl": true,
           "mode": "id",
-          "value": "hokamsingh07@gmail.com"
+          "value": "YOUR_GOOGLE_CALENDAR_ID"
         },
         "start": "={{ $fromAI('start', 'Start datetime ISO 8601 e.g. 2026-06-01T00:00:00. Convert today/tomorrow. Optional - defaults to today start.', 'string', '') || new Date(new Date().setHours(0,0,0,0)).toISOString() }}",
         "end": "={{ $fromAI('end',   'End datetime ISO 8601 e.g. 2026-06-01T23:59:59. Convert today/tomorrow. Optional - defaults to today end.', 'string', '') || new Date(new Date().setHours(23,59,59,999)).toISOString() }}",
