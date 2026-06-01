@@ -10,13 +10,22 @@ Start n8n (data persists in `n8n_data` Docker volume):
 ./start-n8n.sh [/path/to/ObsidianVault]
 ```
 
+Start cloudflared tunnel + register Fathom webhook:
+
+```bash
+./start-tunnel.sh
+```
+
 n8n runs at `http://localhost:5678`.
 
 ## Workflows
 
 | Folder | Description | Trigger |
 |--------|-------------|---------|
-| [fathom-obsidian](workflows/fathom-obsidian/) | Fathom meeting transcripts → Obsidian vault markdown notes | Every 30 min |
+| [fathom-obsidian](workflows/fathom-obsidian/) | Fathom meeting transcripts → Obsidian vault markdown notes | Every 30 min (polling) |
+| [fathom-webhook](workflows/fathom-webhook/) | Fathom meeting transcripts → Obsidian vault markdown notes | Instant (webhook) |
+
+> **Prefer fathom-webhook** — notes appear within seconds of a meeting ending. fathom-obsidian is the fallback if the tunnel is down.
 
 ## Adding a new workflow
 

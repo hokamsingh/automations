@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflared tunnel + Fathom webhook registration
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=developer
+ExecStart=/home/developer/automations/start-tunnel.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

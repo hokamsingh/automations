@@ -1,0 +1,531 @@
+{
+  "updatedAt": "2026-06-01T17:11:42.403Z",
+  "createdAt": "2026-06-01T17:11:42.403Z",
+  "id": "9oS573hMOttbJoMc",
+  "name": "Fathom Webhook \u2192 Obsidian",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "wh-trigger-001",
+      "name": "Fathom Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "fathom-obsidian",
+      "parameters": {
+        "path": "fathom",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "wh-dedup-001",
+      "name": "Check Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) staticData.importedIds = [];\n\nconst body = $input.first().json.body || $input.first().json;\nconst id = String(body.recording_id || body.id || '');\n\nif (!id) throw new Error('Fathom webhook: missing recording_id in payload');\nif (staticData.importedIds.includes(id)) {\n  return [{ json: { skip: true, reason: 'already imported', id } }];\n}\nreturn [{ json: { skip: false, body } }];\n"
+      }
+    },
+    {
+      "id": "wh-if-skip-001",
+      "name": "Already Imported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "wh-respond-skip-001",
+      "name": "Respond OK (skip)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        860,
+        200
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "already imported",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "wh-markdown-001",
+      "name": "Generate Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        400
+      ],
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json.body || $input.first().json;\n\nconst rawDate = item.scheduled_start_time || item.created_at || new Date().toISOString();\nconst dateStr = new Date(rawDate).toISOString().split('T')[0];\nconst title = item.meeting_title || item.title || 'Untitled Meeting';\nconst safeTitle = title.toLowerCase().replace(/[^a-z0-9\\s]+/g,'').trim().replace(/\\s+/g,'-').substring(0,60);\nconst filename = dateStr + '-' + safeTitle + '.md';\n\nconst rawSummary = (item.default_summary && item.default_summary.markdown_formatted) || '';\nconst summary = rawSummary.replace(/\\[([^\\]]+)\\]\\(https:\\/\\/fathom\\.video\\/[^)]+\\)/g,'$1').trim() || '_No summary._';\n\nconst lines = item.transcript || [];\nlet transcriptText = '';\nfor (const line of lines) {\n  const speaker = (line.speaker && line.speaker.display_name) ? line.speaker.display_name : 'Unknown';\n  const words = (line.words || []).map(w => w.text).join(' ').trim();\n  if (words) transcriptText += `**${speaker}**: ${words}\\n\\n`;\n}\nconst shareUrl = item.share_url || '';\nconst transcriptSection = transcriptText.length > 1200\n  ? transcriptText.substring(0,1200).trimEnd() + '\\n\\n_[truncated \u2014 full: ' + shareUrl + ']_'\n  : (transcriptText || '_No transcript._');\n\nconst actions = item.action_items || [];\nconst actionLines = actions.length\n  ? actions.map(a => '- [ ] ' + (typeof a === 'string' ? a : (a.description || JSON.stringify(a)))).join('\\n')\n  : '- [ ] None identified';\n\nconst fathomUrl = item.share_url || item.url || '';\nconst markdown = '# ' + title + '\\n\\nDate: ' + dateStr + '\\nFathom: ' + fathomUrl + '\\n\\n## Summary\\n' + summary + '\\n\\n## Action Items\\n' + actionLines + '\\n\\n## Raw Transcript\\n' + transcriptSection + '\\n';\n\nreturn [{ json: { recording_id: String(item.recording_id || ''), title, markdown, filename, dateStr } }];\n"
+      }
+    },
+    {
+      "id": "wh-prep-001",
+      "name": "Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        400
+      ],
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst encoded = Buffer.from(item.markdown, 'utf8').toString('base64');\nreturn [{ json: { ...item }, binary: { fileData: { data: encoded, mimeType: 'text/markdown', fileName: item.filename, fileExtension: 'md' } } }];\n"
+      }
+    },
+    {
+      "id": "wh-write-001",
+      "name": "Write to Obsidian",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        400
+      ],
+      "parameters": {
+        "fileName": "=/vault/Meetings/{{ $json.filename }}",
+        "dataPropertyName": "fileData",
+        "options": {}
+      }
+    },
+    {
+      "id": "wh-mark-001",
+      "name": "Mark Imported",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        400
+      ],
+      "parameters": {
+        "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) staticData.importedIds = [];\nconst id = String($input.first().json.recording_id || '');\nif (id && !staticData.importedIds.includes(id)) staticData.importedIds.push(id);\nreturn [{ json: { ok: true, file: $input.first().json.filename } }];\n"
+      }
+    },
+    {
+      "id": "wh-respond-ok-001",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1740,
+        400
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Fathom Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Dedup": {
+      "main": [
+        [
+          {
+            "node": "Already Imported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Imported?": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (skip)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Markdown": {
+      "main": [
+        [
+          {
+            "node": "Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Write to Obsidian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Obsidian": {
+      "main": [
+        [
+          {
+            "node": "Mark Imported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Imported": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "02846036-95b6-4a9c-b0c4-5eb12f240c43",
+  "activeVersionId": "02846036-95b6-4a9c-b0c4-5eb12f240c43",
+  "versionCounter": 1,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-01T17:11:42.405Z",
+      "createdAt": "2026-06-01T17:11:42.405Z",
+      "role": "workflow:owner",
+      "workflowId": "9oS573hMOttbJoMc",
+      "projectId": "Ix1fhyUhrFVaXnh4",
+      "project": {
+        "updatedAt": "2026-06-01T15:08:33.082Z",
+        "createdAt": "2026-06-01T15:08:10.922Z",
+        "id": "Ix1fhyUhrFVaXnh4",
+        "name": "Hokam Singh <hosingh@trueigtech.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "eab7da75-3320-403f-8a06-2f4f52f74c0b"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-01T17:11:42.408Z",
+    "createdAt": "2026-06-01T17:11:42.408Z",
+    "versionId": "02846036-95b6-4a9c-b0c4-5eb12f240c43",
+    "workflowId": "9oS573hMOttbJoMc",
+    "nodes": [
+      {
+        "id": "wh-trigger-001",
+        "name": "Fathom Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          300
+        ],
+        "webhookId": "fathom-obsidian",
+        "parameters": {
+          "path": "fathom",
+          "responseMode": "lastNode",
+          "options": {}
+        }
+      },
+      {
+        "id": "wh-dedup-001",
+        "name": "Check Dedup",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          420,
+          300
+        ],
+        "parameters": {
+          "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) staticData.importedIds = [];\n\nconst body = $input.first().json.body || $input.first().json;\nconst id = String(body.recording_id || body.id || '');\n\nif (!id) throw new Error('Fathom webhook: missing recording_id in payload');\nif (staticData.importedIds.includes(id)) {\n  return [{ json: { skip: true, reason: 'already imported', id } }];\n}\nreturn [{ json: { skip: false, body } }];\n"
+        }
+      },
+      {
+        "id": "wh-if-skip-001",
+        "name": "Already Imported?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          640,
+          300
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "skip-check",
+                "leftValue": "={{ $json.skip }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "wh-respond-skip-001",
+        "name": "Respond OK (skip)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          860,
+          200
+        ],
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "already imported",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "wh-markdown-001",
+        "name": "Generate Markdown",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          860,
+          400
+        ],
+        "parameters": {
+          "jsCode": "\nconst item = $input.first().json.body || $input.first().json;\n\nconst rawDate = item.scheduled_start_time || item.created_at || new Date().toISOString();\nconst dateStr = new Date(rawDate).toISOString().split('T')[0];\nconst title = item.meeting_title || item.title || 'Untitled Meeting';\nconst safeTitle = title.toLowerCase().replace(/[^a-z0-9\\s]+/g,'').trim().replace(/\\s+/g,'-').substring(0,60);\nconst filename = dateStr + '-' + safeTitle + '.md';\n\nconst rawSummary = (item.default_summary && item.default_summary.markdown_formatted) || '';\nconst summary = rawSummary.replace(/\\[([^\\]]+)\\]\\(https:\\/\\/fathom\\.video\\/[^)]+\\)/g,'$1').trim() || '_No summary._';\n\nconst lines = item.transcript || [];\nlet transcriptText = '';\nfor (const line of lines) {\n  const speaker = (line.speaker && line.speaker.display_name) ? line.speaker.display_name : 'Unknown';\n  const words = (line.words || []).map(w => w.text).join(' ').trim();\n  if (words) transcriptText += `**${speaker}**: ${words}\\n\\n`;\n}\nconst shareUrl = item.share_url || '';\nconst transcriptSection = transcriptText.length > 1200\n  ? transcriptText.substring(0,1200).trimEnd() + '\\n\\n_[truncated \u2014 full: ' + shareUrl + ']_'\n  : (transcriptText || '_No transcript._');\n\nconst actions = item.action_items || [];\nconst actionLines = actions.length\n  ? actions.map(a => '- [ ] ' + (typeof a === 'string' ? a : (a.description || JSON.stringify(a)))).join('\\n')\n  : '- [ ] None identified';\n\nconst fathomUrl = item.share_url || item.url || '';\nconst markdown = '# ' + title + '\\n\\nDate: ' + dateStr + '\\nFathom: ' + fathomUrl + '\\n\\n## Summary\\n' + summary + '\\n\\n## Action Items\\n' + actionLines + '\\n\\n## Raw Transcript\\n' + transcriptSection + '\\n';\n\nreturn [{ json: { recording_id: String(item.recording_id || ''), title, markdown, filename, dateStr } }];\n"
+        }
+      },
+      {
+        "id": "wh-prep-001",
+        "name": "Prepare File",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1080,
+          400
+        ],
+        "parameters": {
+          "jsCode": "\nconst item = $input.first().json;\nconst encoded = Buffer.from(item.markdown, 'utf8').toString('base64');\nreturn [{ json: { ...item }, binary: { fileData: { data: encoded, mimeType: 'text/markdown', fileName: item.filename, fileExtension: 'md' } } }];\n"
+        }
+      },
+      {
+        "id": "wh-write-001",
+        "name": "Write to Obsidian",
+        "type": "n8n-nodes-base.writeBinaryFile",
+        "typeVersion": 1,
+        "position": [
+          1300,
+          400
+        ],
+        "parameters": {
+          "fileName": "=/vault/Meetings/{{ $json.filename }}",
+          "dataPropertyName": "fileData",
+          "options": {}
+        }
+      },
+      {
+        "id": "wh-mark-001",
+        "name": "Mark Imported",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1520,
+          400
+        ],
+        "parameters": {
+          "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.importedIds) staticData.importedIds = [];\nconst id = String($input.first().json.recording_id || '');\nif (id && !staticData.importedIds.includes(id)) staticData.importedIds.push(id);\nreturn [{ json: { ok: true, file: $input.first().json.filename } }];\n"
+        }
+      },
+      {
+        "id": "wh-respond-ok-001",
+        "name": "Respond OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1740,
+          400
+        ],
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "ok",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Fathom Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Dedup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Dedup": {
+        "main": [
+          [
+            {
+              "node": "Already Imported?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Already Imported?": {
+        "main": [
+          [
+            {
+              "node": "Respond OK (skip)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Generate Markdown",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate Markdown": {
+        "main": [
+          [
+            {
+              "node": "Prepare File",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare File": {
+        "main": [
+          [
+            {
+              "node": "Write to Obsidian",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Write to Obsidian": {
+        "main": [
+          [
+            {
+              "node": "Mark Imported",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Imported": {
+        "main": [
+          [
+            {
+              "node": "Respond OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Hokam Singh",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-01T17:11:42.491Z",
+        "id": 8,
+        "workflowId": "9oS573hMOttbJoMc",
+        "versionId": "02846036-95b6-4a9c-b0c4-5eb12f240c43",
+        "event": "activated",
+        "userId": "eab7da75-3320-403f-8a06-2f4f52f74c0b"
+      }
+    ]
+  }
+}
