@@ -216,8 +216,8 @@
     },
     {
       "id": "7e0fa1ed-2cd6-48a6-bf04-d67d4d7fe842",
-      "name": "OpenRouter",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "name": "Groq",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "position": [
         1680,
         544
@@ -225,12 +225,13 @@
       "parameters": {
         "options": {
           "maxTokens": 4096
-        }
+        },
+        "model": "llama-3.3-70b-versatile"
       },
       "credentials": {
-        "openRouterApi": {
-          "id": "YOUR_OPENROUTER_CREDENTIAL_ID",
-          "name": "openRouterApi Credential"
+        "groqApi": {
+          "id": "YOUR_GROQ_CREDENTIAL_ID",
+          "name": "Groq account"
         }
       },
       "typeVersion": 1
@@ -500,17 +501,6 @@
         ]
       ]
     },
-    "OpenRouter": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "TARS \ud83e\udd16",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Send Email": {
       "ai_tool": [
         [
@@ -616,6 +606,17 @@
           {
             "node": "Telegram",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "TARS \ud83e\udd16",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
