@@ -17,8 +17,8 @@
           "mode": "id",
           "value": "hokamsingh07@gmail.com"
         },
-        "start": "={{ $fromAI('start', 'Start datetime in ISO 8601, e.g. 2026-06-01T00:00:00. Convert natural language like today/tomorrow. Default: today start.', 'string') || new Date(new Date().setHours(0,0,0,0)).toISOString() }}",
-        "end": "={{ $fromAI('end',   'End datetime in ISO 8601, e.g. 2026-06-01T23:59:59. Convert natural language like today/tomorrow. Default: today end.', 'string') || new Date(new Date().setHours(23,59,59,999)).toISOString() }}",
+        "start": "={{ $fromAI('start', 'Start datetime ISO 8601 e.g. 2026-06-01T00:00:00. Convert today/tomorrow. Optional - defaults to today start.', 'string', '') || new Date(new Date().setHours(0,0,0,0)).toISOString() }}",
+        "end": "={{ $fromAI('end',   'End datetime ISO 8601 e.g. 2026-06-01T23:59:59. Convert today/tomorrow. Optional - defaults to today end.', 'string', '') || new Date(new Date().setHours(23,59,59,999)).toISOString() }}",
         "additionalFields": {}
       },
       "credentials": {
